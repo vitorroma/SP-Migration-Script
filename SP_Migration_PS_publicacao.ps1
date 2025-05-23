@@ -1,14 +1,17 @@
-# ConfiguraÁıes de autenticaÁ„o
+# Configura√ß√µes de autentica√ß√£o
+# Authentication Settings
 $clientId = "xx00x0x0x0x-x000-0000-xxxx-xxxx0000xxx00"
 $clientSecret = "xx00x0x0x0x-x000-0000-xxxx-xxxx0000xxx00"
 $tenantId = "xx00x0x0x0x-x000-0000-xxxx-xxxx0000xxx00"
 $authority = "https://login.microsoftonline.com/$tenantId"
 $scope = "https://graph.microsoft.com/.default"
 
-# Definir a vari·vel para o caminho base da URL 
-$baseUrlPath = "Engenharia de ManutenÁ„o/Equipamentos/Eletrica"
+# Definir a vari√°vel para o caminho base da URL 
+# Set the variable to the base path of the URL
+$baseUrlPath = "Engenharia de Manuten√ß√£o/Equipamentos/Eletrica"
 
-# FunÁ„o para obter o token de acesso
+# Fun√ß√£o para obter o token de acesso
+# Function to get the access token
 function Get-AccessToken {
     $body = @{
         client_id = $clientId
@@ -22,7 +25,8 @@ function Get-AccessToken {
 
 $accessToken = Get-AccessToken
 
-# ConfiguraÁ„o do logging
+# Configura√ß√£o do logging
+# Logging configuration
 $logFile = "c:\temp\migration_pasta_log.csv"
 if (-Not (Test-Path $logFile)) {
     "Source;Destination;Item name;Extension;Item size (MB);Type;Status;Message;Destination item ID;Incremental round;Date;Time" | Out-File -FilePath $logFile
@@ -46,7 +50,8 @@ function Log-Migration {
     "$source;$destination;$itemName;$extension;$itemSizeMB;$type;$status;$message;$destinationItemId;$incrementalRound;$date;$time" | Out-File -FilePath $logFile -Append
 }
 
-# FunÁ„o para migrar arquivos com renovaÁ„o de token
+# Fun√ß√£o para migrar arquivos com renova√ß√£o de token
+# Function to migrate files with token renewal
 function Migrate-Files {
     param (
         [string]$sourceFolder,
@@ -58,12 +63,14 @@ function Migrate-Files {
         "Content-Type" = "application/json"
     }
     # Verificar se a pasta de origem existe
+    # Check if the source folder exists
     if (-Not (Test-Path $sourceFolder)) {
-        Log-Migration -source $sourceFolder -destination "N/A" -itemName "N/A" -extension "N/A" -itemSizeMB 0 -type "N/A" -status "Falha" -message "Pasta de origem n„o encontrada: $sourceFolder" -destinationItemId "N/A" -incrementalRound "N/A"
+        Log-Migration -source $sourceFolder -destination "N/A" -itemName "N/A" -extension "N/A" -itemSizeMB 0 -type "N/A" -status "Falha" -message "Pasta de origem n√£o encontrada: $sourceFolder" -destinationItemId "N/A" -incrementalRound "N/A"
         return
     }
     Write-Host "Pasta de origem encontrada: $sourceFolder"
     # Obter lista de arquivos e pastas da pasta de origem
+    # Get list of files and folders from source folder
     $items = Get-ItemsFromSource -folder $sourceFolder -filters $filters
     $totalItems = $items.Count
     $currentItem = 0
@@ -73,28 +80,34 @@ function Migrate-Files {
         Write-Host "Migrando item: $($item.FullName) ($progress% completo)"
         
         try {
-            # Verificar se o erro È 401 (n„o autorizado)
+            # Verificar se o erro √© 401 (n√£o autorizado)
+	    # Check if the error is 401 (unauthorized)
             if ($_.Exception.Response.StatusCode -eq 401) {
                 Write-Host "Token expirado. Renovando token..."
                 $accessToken = Get-AccessToken
                 $headers.Authorization = "Bearer $accessToken"
-                # Tentar novamente a operaÁ„o apÛs renovar o token
+                # Tentar novamente a opera√ß√£o ap√≥s renovar o token
                 continue
             }
             if ($item.PSIsContainer) {
                 # Criar pasta no destino
+		# Create folder in destination
                 Create-FolderInDrive -folder $item -driveId $destinationDrive -headers $headers
             } else {
-                # Verificar se o arquivo j· existe no destino com tamanho igual ou superior
+                # Verificar se o arquivo j√° existe no destino com tamanho igual ou superior
+		# Check if the file already exists in the destination with equal or greater size
                 if (-not (Test-DestinationFileExists -file $item -driveId $destinationDrive -headers $headers)) {
                     # Migrar arquivo para o SharePoint
+		    # Migrate file to SharePoint
                     $destinationItemId, $uploadUrl, $cleanedDestinationPath, $incrementalRound = Upload-FileToDrive -file $item -driveId $destinationDrive -headers $headers
-                    # Ocultar as informaÁıes desnecess·rias do uploadUrl na coluna Destination item ID
-                    # O cleanedUploadUrl agora contÈm o caminho completo de destino e nome do arquivo
+                    # Ocultar as informa√ß√µes desnecess√°rias do uploadUrl na coluna Destination item ID
+                    # O cleanedUploadUrl agora cont√©m o caminho completo de destino e nome do arquivo
                     $cleanedUploadUrl = "$baseUrlPath/$($item.FullName.Replace($sourceFolder, '').Replace('\\\\', '/'))"
-                    # Ocultar as informaÁıes desnecess·rias do uploadUrl na coluna Destination, exibindo apenas o caminho atÈ a pasta
+                    # Ocultar as informa√ß√µes desnecess√°rias do uploadUrl na coluna Destination, exibindo apenas o caminho at√© a pasta
+		    # Hide unnecessary uploadUrl information in the Destination column, displaying only the path to the folder
                     $cleanedDestinationPathOnly = "$baseUrlPath"
                     # Definir o tamanho do arquivo em MB antes de chamar Log-Migration
+		    # Set the file size in MB before calling Log-Migration
                     $fileSizeMB = [math]::Round($item.Length / 1MB, 2)
                     Log-Migration -source "$($item.DirectoryName)" -destination "$cleanedDestinationPathOnly" -itemName "$($item.Name)" `
                     -extension "$($item.Extension)" `
@@ -105,16 +118,18 @@ function Migrate-Files {
                     -destinationItemId "$cleanedUploadUrl" `
                     -incrementalRound "$incrementalRound"
                 } else {
-                    Write-Host "Arquivo j· migrado: $($item.FullName)"
+                    Write-Host "Arquivo j√° migrado: $($item.FullName)"
                     # Definir o tamanho do arquivo em MB antes de chamar Log-Migration
+		    # Set the file size in MB before calling Log-Migration
                     $fileSizeMB = [math]::Round($item.Length / 1MB, 2)
-                    # O cleanedUploadUrl agora contÈm o caminho completo de destino e nome do arquivo
+                    # O cleanedUploadUrl cont√©m o caminho completo de destino e nome do arquivo
+		    # The cleanedUploadUrl contains the full destination path and file name
                     Log-Migration -source "$($item.DirectoryName)" -destination "$baseUrlPath" -itemName "$($item.Name)" `
                     -extension "$($item.Extension)" `
                     -itemSizeMB "$fileSizeMB" `
                     -type "File" `
                     -status "Pulou" `
-                    -message "Arquivo j· migrado" `
+                    -message "Arquivo j√° migrado" `
                     -destinationItemId "$baseUrlPath/$($item.FullName.Replace($sourceFolder, '').Replace('\\\\', '/'))" `
                     -incrementalRound "0"
                 }
@@ -125,12 +140,15 @@ function Migrate-Files {
                 Write-Host "Token expirado. Renovando token..."
                 $accessToken = Get-AccessToken
                 $headers.Authorization = "Bearer $accessToken"
-                # Tentar novamente a operaÁ„o apÛs renovar o token
+                # Tentar novamente a opera√ß√£o ap√≥s renovar o token
+		# Retry the operation after renewing the token
                 continue
             }
             # Definir o tamanho do arquivo em MB antes de chamar Log-Migration
+	    # Set the file size in MB before calling Log-Migration
             $fileSizeMB = [math]::Round($item.Length / 1MB, 2)
-            # O cleanedUploadUrl agora contÈm o caminho completo de destino e nome do arquivo
+            # O cleanedUploadUrl cont√©m o caminho completo de destino e nome do arquivo
+	    # The cleanedUploadUrl contains the full destination path and file name
             Log-Migration -source "$($item.DirectoryName)" -destination "$baseUrlPath" -itemName "$($item.Name)" `
             -extension "$($item.Extension)" `
             -itemSizeMB "$fileSizeMB" `
@@ -150,17 +168,21 @@ function Test-DestinationFileExists {
         [hashtable]$headers
     )
     
-    # Verificar se o arquivo j· existe no destino com tamanho igual ou superior
+    # Verificar se o arquivo j√° existe no destino com tamanho igual ou superior
+    # Check if the file already exists in the destination with equal or greater size
     try {
-        # Verificar se o erro È 401 (n„o autorizado)
+        # Verificar se o erro √© 401 (n√£o autorizado)
+	# Check if the error is 401 (unauthorized)
         if ($_.Exception.Response.StatusCode -eq 401) {
             Write-Host "Token expirado. Renovando token..."
             $accessToken = Get-AccessToken
             $headers.Authorization = "Bearer $accessToken"
-            # Tentar novamente a operaÁ„o apÛs renovar o token
+            # Tentar novamente a opera√ß√£o ap√≥s renovar o token
+            # Retry the operation after renewing the token
             continue
         }
-        # Verificar se o arquivo j· existe no destino
+        # Verificar se o arquivo j√° existe no destino
+	# Check if the file already exists in the destination
         $filePath = $file.FullName.Replace($sourceFolder, '').Replace('\\', '/')
         $checkFileUrl = "https://graph.microsoft.com/v1.0/drives/$driveId/root:/$baseUrlPath/${filePath}"
         $response = Invoke-RestMethod -Method Get -Uri $checkFileUrl -Headers $headers -ErrorAction Stop
@@ -180,15 +202,18 @@ function Get-ItemsFromSource {
         [string]$folder,
         [hashtable]$filters
     )
-    # Implementar lÛgica para obter arquivos e pastas da pasta de origem aplicando filtros
-    # Exemplo: retornar apenas arquivos que n„o sejam .dat, .exe, desktop.ini, n„o comecem com ~# e que foram modificados nos ˙ltimos 3 anos
+    # Implementar l√≥gica para obter arquivos e pastas da pasta de origem aplicando filtros
+    # Exemplo: retornar apenas arquivos que n√£o sejam .dat, .exe, desktop.ini, n√£o comecem com ~# e que foram modificados nos √∫ltimos 3 anos
+    # Implement logic to get files and folders from the source folder by applying filters
+    # Example: return only files that are not .dat, .exe, desktop.ini, do not start with ~# and that were modified in the last 3 years
     $threeYearsAgo = (Get-Date).AddYears(-3)
     return Get-ChildItem -Path $folder -Recurse | Where-Object {
         ($_.PSIsContainer) -or ($_.Extension -ne ".dat" -and $_.Extension -ne ".lnk" -and $_.Extension -ne ".exe"  -and $_.Name -notmatch "^~#" -and $_.Name -notmatch "desktop.ini" -and $_.LastWriteTime -gt $threeYearsAgo)
     }
 }
 
-# Atualizar a funÁ„o Create-FolderInDrive para usar a vari·vel baseUrlPath
+# Atualizar a fun√ß√£o Create-FolderInDrive para usar a vari√°vel baseUrlPath
+# Update the Create-FolderInDrive function to use the baseUrlPath variable
 function Create-FolderInDrive {
     param (
         [System.IO.DirectoryInfo]$folder,
@@ -196,26 +221,29 @@ function Create-FolderInDrive {
         [hashtable]$headers
     )
     # Criar pasta no Drive
+    # Create folder in Drive
     $folderPath = $folder.FullName.Replace($sourceFolder, '').Replace('\\', '/')
     $createFolderUrl = "https://graph.microsoft.com/v1.0/drives/$driveId/root:/$baseUrlPath${folderPath}:/children"
     $checkFolderUrl = "https://graph.microsoft.com/v1.0/drives/$driveId/root:/$baseUrlPath${folderPath}"
 
-    Write-Host "Verificando se a pasta j· existe no URL: $checkFolderUrl"
+    Write-Host "Verificando se a pasta j√° existe no URL: $checkFolderUrl"
 
     try {
-        # Verificar se o erro È 401 (n„o autorizado)
+        # Verificar se o erro √© 401 (n√£o autorizado)
+	# Check if the error is 401 (unauthorized)
         if ($_.Exception.Response.StatusCode -eq 401) {
             Write-Host "Token expirado. Renovando token..."
             $accessToken = Get-AccessToken
             $headers.Authorization = "Bearer $accessToken"
-            # Tentar novamente a operaÁ„o apÛs renovar o token
+            # Tentar novamente a opera√ß√£o ap√≥s renovar o token
+	    # Retry the operation after renewing the token
             continue
         }
         $response = Invoke-RestMethod -Method Get -Uri $checkFolderUrl -Headers $headers -ErrorAction Stop
-        Write-Host "Pasta j· existe: $($folder.FullName)"
+        Write-Host "Pasta j√° existe: $($folder.FullName)"
     } catch {
         if ($_.Exception.Response.StatusCode -eq 404) {
-            Write-Host "Pasta n„o encontrada, criando nova pasta no URL: $createFolderUrl"
+            Write-Host "Pasta n√£o encontrada, criando nova pasta no URL: $createFolderUrl"
             $body = @{
                 name = $folder.Name
                 folder = @{ }
@@ -223,17 +251,19 @@ function Create-FolderInDrive {
             } | ConvertTo-Json
 
             try {
-        # Verificar se o erro È 401 (n„o autorizado)
+        # Verificar se o erro √© 401 (n√£o autorizado)
+	# Check if the error is 401 (unauthorized)
         if ($_.Exception.Response.StatusCode -eq 401) {
             Write-Host "Token expirado. Renovando token..."
             $accessToken = Get-AccessToken
             $headers.Authorization = "Bearer $accessToken"
-            # Tentar novamente a operaÁ„o apÛs renovar o token
+            # Tentar novamente a opera√ß√£o ap√≥s renovar o token
+	    # Retry the operation after renewing the token
             continue
         }
                 $response = Invoke-RestMethod -Method Post -Uri $createFolderUrl -Headers $headers -Body $body -ContentType "application/json"
                 if ($response -eq $null) {
-                    throw "Falha na criaÁ„o da pasta: $($folder.Name)"
+                    throw "Falha na cria√ß√£o da pasta: $($folder.Name)"
                 }
             } catch {
                 Write-Host "Erro ao criar pasta: $_"
@@ -252,25 +282,29 @@ function Upload-FileToDrive {
         [string]$driveId,
         [hashtable]$headers
     )
-    # Verificar se o arquivo È v·lido
+    # Verificar se o arquivo √© v√°lido
+    # Check if the file is valid
     if (-Not $file -or -Not $file.Exists) {
-        throw "Arquivo inv·lido ou n„o encontrado: $($file.FullName)"
+        throw "Arquivo inv√°lido ou n√£o encontrado: $($file.FullName)"
     }
 
-    # Verificar se o arquivo j· existe no destino
+    # Verificar se o arquivo j√° existe no destino
+    # Check if the file already exists in the destination
     $filePath = $file.FullName.Replace($sourceFolder, '').Replace('\\', '/')
     $checkFileUrl = "https://graph.microsoft.com/v1.0/drives/$driveId/root:/$baseUrlPath/${filePath}"
     $uploadUrl = "https://graph.microsoft.com/v1.0/drives/$driveId/root:/$baseUrlPath/${filePath}:/content"
 
-    Write-Host "Verificando se o arquivo j· existe no URL: $checkFileUrl"
+    Write-Host "Verificando se o arquivo j√° existe no URL: $checkFileUrl"
 
     try {
-        # Verificar se o erro È 401 (n„o autorizado)
+        # Verificar se o erro √© 401 (n√£o autorizado)
+	# Check if the error is 401 (unauthorized)
         if ($_.Exception.Response.StatusCode -eq 401) {
             Write-Host "Token expirado. Renovando token..."
             $accessToken = Get-AccessToken
             $headers.Authorization = "Bearer $accessToken"
-            # Tentar novamente a operaÁ„o apÛs renovar o token
+            # Tentar novamente a opera√ß√£o ap√≥s renovar o token
+	    # Retry the operation after renewing the token
             continue
         }
         $response = Invoke-RestMethod -Method Get -Uri $checkFileUrl -Headers $headers -ErrorAction Stop
@@ -278,7 +312,7 @@ function Upload-FileToDrive {
         $destinationFileLastModified = [datetime]$response.lastModifiedDateTime
 
         if ($file.Length -gt $destinationFileSize -or $file.LastWriteTime -gt $destinationFileLastModified) {
-            Write-Host "Arquivo no destino È menor ou mais antigo. Realizando upload para URL: $uploadUrl"
+            Write-Host "Arquivo no destino √© menor ou mais antigo. Realizando upload para URL: $uploadUrl"
             $fileContent = Get-Content -Path $file.FullName -Raw -Encoding Byte
             $response = Invoke-RestMethod -Method Put -Uri $uploadUrl -Headers $headers -Body $fileContent
             if ($response -eq $null) {
@@ -289,15 +323,15 @@ function Upload-FileToDrive {
 			$incrementalRound++
             return $response.id, $cleanedUploadUrl, $cleanedDestinationPath, $incrementalRound
         } else {
-            Write-Host "Arquivo no destino È igual ou mais recente. N„o È necess·rio realizar upload."
+            Write-Host "Arquivo no destino √© igual ou mais recente. N√£o √© necess√°rio realizar upload."
             $cleanedUploadUrl = "$baseUrlPath/$($file.FullName.Replace($sourceFolder, '').Replace('\\', '/'))"
             $cleanedDestinationPath = "$baseUrlPath"
-            Log-Migration -source $file.DirectoryName -destination $cleanedDestinationPath -itemName $file.Name -extension $file.Extension -itemSizeMB ([math]::Round($file.Length / 1MB, 2)) -type "File" -status "Pulou" -message "Arquivo j· migrado" -destinationItemId $cleanedUploadUrl -incrementalRound "0"
+            Log-Migration -source $file.DirectoryName -destination $cleanedDestinationPath -itemName $file.Name -extension $file.Extension -itemSizeMB ([math]::Round($file.Length / 1MB, 2)) -type "File" -status "Pulou" -message "Arquivo j√° migrado" -destinationItemId $cleanedUploadUrl -incrementalRound "0"
             return $response.id, $cleanedUploadUrl, $cleanedDestinationPath
         }
     } catch {
         if ($_.Exception.Response.StatusCode -eq 404) {
-            Write-Host "Arquivo n„o encontrado no destino. Realizando upload para URL: $uploadUrl"
+            Write-Host "Arquivo n√£o encontrado no destino. Realizando upload para URL: $uploadUrl"
             $fileContent = Get-Content -Path $file.FullName -Raw -Encoding Byte
             $response = Invoke-RestMethod -Method Put -Uri $uploadUrl -Headers $headers -Body $fileContent
             if ($response -eq $null) {
@@ -314,6 +348,7 @@ function Upload-FileToDrive {
 }
 
 # Exemplo de uso
+# Usage example
 $sourceFolder = "\\server01\Area\Administrativo\Reunioes\Ata"
 $driveId = "x!XXX-x0x0x0x0x0x0x0ss0_xxxX0xxXxX0xXXx_Ox0X-X0H"
 $filters = @{ extension = ".txt" }
